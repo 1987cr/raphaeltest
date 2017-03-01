@@ -35,10 +35,21 @@
 // Initialize container when document is loaded
 $(document).ready(function () {
 
+	function getSvgPoint(x, y) {
+		var svg = $("#raphael-container > svg")[0],
+            svgDropPoint = svg.createSVGPoint();
+
+        svgDropPoint.x = x;
+        svgDropPoint.y = y;
+		return svgDropPoint.matrixTransform(svg.getScreenCTM().inverse());
+        //svgDropPoint = svgDropPoint.matrixTransform($(main_group_selector).getCTM().inverse());
+    }
+
 
 	const mapSize={ width: 2000, height: 2000 }
 	var paper = Raphael("raphael-container", mapSize.width, mapSize.height);
-
+	//group for minimap
+	var group = paper.set()
 	// Popover
 	var ph = $('#pop-holder');
 	ph.popover({
@@ -48,16 +59,6 @@ $(document).ready(function () {
 		animation: false,
 		html: true
   	});
-
-	//settings componets to minimap
-	var group = paper.set(),
-	    marging = paper.rect(0, 0, mapSize.width, mapSize.height),
-	    viewRectMiniMap,
-	    scaleView,
-		factorZoom
-
-	//adding component to minimap
-	group.push(marging)
 
 	// Adding circles
 	for(var i=1; i<=100; i++) {
@@ -100,10 +101,36 @@ $(document).ready(function () {
 		
 	}
 
+	//settings componets to minimap
+	var marging = paper.rect(0, 0, mapSize.width, mapSize.height),
+	    viewRectMiniMap,
+		// testRect, // RECT TEST
+	    scaleView,
+		factorZoom,
+		w = window.innerWidth ,
+		h = window.innerHeight,
+		width = mapSize.width * 0.1,
+		height = mapSize.height * 0.1,
+		topLeft = ",0,0",
+		//create paper of minimap
+		miniMap = Raphael(document.getElementById("minimap"), width, height);
+
+	//adding component to minimap
+	group.push(marging)
+	scaleView = 0.1
+	var transformString = "s" + scaleView + "," + scaleView + topLeft
+	
+	// clone group 
+	var miniset = group.cloneToPaper(miniMap);
+	miniset.transform(transformString);
+	viewRectMiniMap = miniMap.rect(0, 0, w * scaleView , h * scaleView)
+									.data("top",0)
+									.data("left",0);	
+
 	// Svg-zoom-pan main Container
 	var svgElement = document.querySelector('#raphael-container > svg')
 	var panZoomTigerContainer = svgPanZoom(svgElement, {
-      zoomEnabled: false,
+      zoomEnabled: true,
       fit: false,
       center: false,
       minZoom: 1,
@@ -115,6 +142,7 @@ $(document).ready(function () {
 
 	function beforePan (oldPan, newPan){
 		ph.popover('hide');
+		console.log(newPan)
 		var stopHorizontal = false
 		, stopVertical = false
 		, gutterWidth = 200
@@ -140,50 +168,57 @@ $(document).ready(function () {
 	}
 
 	function beforeZoom (oldZoom, newZoom){
+
 		ph.popover('hide');
-//		var zoom =  newZoom / 10
-//		transformStr = "s"+zoom+","+zoom
-//		console.log( transformStr, zoom, this.getSizes().realZoom)
-		//viewRectMiniMap.transform(transformStr)
+
+		var factor  = newZoom/oldZoom;
+		scaleView = scaleView / factor;
+
+		var w = window.innerWidth ,
+			h = window.innerHeight,	
+			width = w * scaleView,
+			height = h * scaleView,
+			x = (event.clientX ),// - (width / 2),
+			y = (event.clientY ),// - (height / 2);
+			data = viewRectMiniMap.data(),
+			cursorX = (data.top  + x ) * scaleView,
+			cursorY = (data.left + y) * scaleView;
+			rectX = cursorX - (width/2)
+			rectY = cursorY - (height/2)
+			
+		
+		
+		console.log(this.getPan().x * scaleView*-1 )	
+		//console.log(data.top, x, scaleView)
+		/** rect TEST 
+		testRect ? testRect.remove(): null
+		testRect = miniMap.rect(this.getPan().x * scaleView*-1 , this.getPan().y * scaleView*-1 ,width , height)
+		testRect.node.setAttribute("fill", "#00f");*/
+
+		viewRectMiniMap.remove()
+		//console.log(getSvgPoint(x,y))
+		viewRectMiniMap = miniMap.rect(this.getPan().x * scaleView*-1 , this.getPan().y * scaleView*-1 , width , height)
+							.data("top",rectX)
+							.data("left",rectY);	
+		 
+
 		return newZoom
 	}	
-
-	function setMiniMap(top, left, scale){
-		//set minimap data
-		var w = window.innerWidth ,
-		    h = window.innerHeight,
-		    width = mapSize.width * 0.1,
-		    height = mapSize.height * 0.1,
-		    topLeft = ",0,0"
 		
-		scaleView = scale ? scale : 0.1
-		if (top && left){
-			topLeft = ","+top+","+left
-		}
-		var transformString = "s" + scaleView + "," + scaleView + topLeft
-
-		//create paper of minimap
-		var miniMap = Raphael(document.getElementById("minimap"), width, height);
-		// clone group 
-		var miniset = group.cloneToPaper(miniMap);
-
-		miniset.transform(transformString);
-		
-		viewRectMiniMap = miniMap.rect(0, 0, w * scaleView , h * scaleView)
-										.data("top",0)
-										.data("left",0);		
-		
-	}
-
-	setMiniMap()
 
 
 	function moveFocusMinimap(distance){
 		//panZoomTigerContainer.pan(point)
 		var dx = distance.x * scaleView,
 			dy = distance.y * scaleView,
-			translation = dx + "," + dy
+			translation = dx + "," + dy,
+			top = viewRectMiniMap.data('top') + dx
+			left = viewRectMiniMap.data('left') + dy
+
 		viewRectMiniMap.translate(translation)
+		viewRectMiniMap.data('top', top)
+		viewRectMiniMap.data('left', left)
+		//console.log(viewRectMiniMap.data())
 	}
 
 	//set zoom mini map
@@ -197,4 +232,6 @@ $(document).ready(function () {
       //onPan: onPan
 	  //beforePan: beforePan
 	});
+	//console.log(panZoomTigerMinimap.getSizes().realZoom)
+	//console.log(panZoomTigerContainer.getSizes().realZoom)
 });
